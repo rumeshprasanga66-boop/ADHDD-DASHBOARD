@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---- BUDGET ----
+
+model Income {
+  id        String   @id @default(cuid())
+  source    String // "Al Caminetto Restaurant" | "Extra Work" | "Food Money"
+  amount    Float
+  month     String // "2025-01"
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  category  String // rent | board | utilities | data | food | transport | clothes | savings | gym | other
+  label     String
+  amount    Float
+  month     String // "2025-01"
+  isFixed   Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- ADHD APPOINTMENTS & MEDICATION ----
+
+model Appointment {
+  id        String   @id @default(cuid())
+  title     String
+  date      DateTime
+  duration  Int      @default(60) // minutes
+  cost      Float    @default(500)
+  location  String?
+  notes     String?
+  completed Boolean  @default(false)
+  reminder  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Medication {
+  id        String   @id @default(cuid())
+  name      String // "Concerta"
+  dosage    String // "36mg"
+  cost      Float // 200 lei
+  month     String // "2025-01"
+  taken     Boolean @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- FOOD TRACKER ----
+
+model FoodItem {
+  id        String   @id @default(cuid())
+  name      String
+  category  String // meat | dairy | veg | fruit | grains | pantry | frozen | other
+  price     Float // lei per unit
+  quantity  Float // amount purchased
+  unit      String // "kg" | "pack" | "buc" | "l"
+  stock     Float // how much left
+  stockUnit String // "kg" | "pack" | "buc" | "l"
+  calories  Int // kcal per unit (100g or per pack)
+  location  String // "freezer" | "fridge" | "pantry"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- WORKOUT PLAN ----
+
+model WorkoutPlan {
+  id        String   @id @default(cuid())
+  day       Int // 1 = Chest, 2 = Back, 3 = Legs
+  dayName   String // "Chest Day"
+  focus     String // "Chest" | "Back" | "Legs"
+  exercises Exercise[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Exercise {
+  id         String   @id @default(cuid())
+  workoutId  String
+  name       String
+  sets       Int
+  reps       String // "6-8" | "10-12"
+  restSec    Int @default(90)
+  weight     String? // suggested starting weight
+  notes      String?
+  order      Int @default(0)
+  completed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workout    WorkoutPlan @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+}
+
+model WorkoutSession {
+  id        String   @id @default(cuid())
+  dayName   String
+  date      DateTime
+  completed Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
