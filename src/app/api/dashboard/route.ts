@@ -4,8 +4,9 @@ import { db } from '@/lib/db'
 export async function GET() {
   const now = new Date()
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
-  const [incomes, expenses, appointments, medications, foodItems, workoutPlans, sessions] =
+  const [incomes, expenses, appointments, medications, foodItems, workoutPlans, sessions, routineTasks, routineLogs] =
     await Promise.all([
       db.income.findMany({ where: { month } }),
       db.expense.findMany({ where: { month } }),
@@ -14,6 +15,8 @@ export async function GET() {
       db.foodItem.findMany(),
       db.workoutPlan.findMany({ include: { exercises: true } }),
       db.workoutSession.findMany({ orderBy: { date: 'desc' }, take: 10 }),
+      db.routineTask.findMany({ orderBy: { order: 'asc' } }),
+      db.routineLog.findMany({ where: { date: today } }),
     ])
 
   const totalIncome = incomes.reduce((s, i) => s + i.amount, 0)
@@ -45,6 +48,15 @@ export async function GET() {
     0
   )
 
+  // Routine progress for today (default to work day if no log exists yet today)
+  const doneToday = routineLogs.filter((l) => l.done).length
+  const logMap = new Map(routineLogs.map((l) => [l.taskId, l]))
+  // Pick the day type that has more tasks (work: 7, off: 24). If no logs, infer from weekday.
+  const isWeekend = now.getDay() === 0 || now.getDay() === 6
+  const todayDayType = isWeekend ? 'off' : 'work'
+  const todayTasks = routineTasks.filter((t) => t.dayType === todayDayType)
+  const todayDone = todayTasks.filter((t) => logMap.get(t.id)?.done).length
+
   return NextResponse.json({
     month,
     income: totalIncome,
@@ -66,5 +78,13 @@ export async function GET() {
     workoutPlans: workoutPlans.length,
     sessionsCount: sessions.length,
     completedSessions: sessions.filter((s) => s.completed).length,
+    routine: {
+      todayDayType,
+      workTasks: routineTasks.filter((t) => t.dayType === 'work').length,
+      offTasks: routineTasks.filter((t) => t.dayType === 'off').length,
+      todayTasks: todayTasks.length,
+      todayDone,
+      todayProgress: todayTasks.length > 0 ? (todayDone / todayTasks.length) * 100 : 0,
+    },
   })
 }

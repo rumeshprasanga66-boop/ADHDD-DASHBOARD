@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Wallet, CalendarHeart, Apple, Dumbbell, LayoutDashboard, Moon, Sun, Sparkles } from 'lucide-react'
+import { Wallet, CalendarHeart, Apple, Dumbbell, LayoutDashboard, Moon, Sun, Sparkles, CalendarDays } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -11,8 +11,9 @@ import { BudgetTab } from '@/components/habify/budget-tab'
 import { AppointmentsTab } from '@/components/habify/appointments-tab'
 import { FoodTab } from '@/components/habify/food-tab'
 import { WorkoutTab } from '@/components/habify/workout-tab'
+import { RoutinesTab } from '@/components/habify/routines-tab'
 
-type TabKey = 'dashboard' | 'budget' | 'appointments' | 'food' | 'workout'
+type TabKey = 'dashboard' | 'budget' | 'appointments' | 'food' | 'workout' | 'routines'
 
 const TABS: { key: TabKey; label: string; icon: typeof Wallet }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -20,6 +21,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Wallet }[] = [
   { key: 'appointments', label: 'ADHD', icon: CalendarHeart },
   { key: 'food', label: 'Food', icon: Apple },
   { key: 'workout', label: 'Workout', icon: Dumbbell },
+  { key: 'routines', label: 'Routine', icon: CalendarDays },
 ]
 
 export default function Home() {
@@ -103,6 +105,7 @@ export default function Home() {
                   {tab === 'appointments' && <AppointmentsTab />}
                   {tab === 'food' && <FoodTab />}
                   {tab === 'workout' && <WorkoutTab />}
+                  {tab === 'routines' && <RoutinesTab />}
                 </motion.div>
               </AnimatePresence>
             </TabsContent>

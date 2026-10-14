@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ProgressRing } from './progress-ring'
 import { fmtLei, fmtDateTime, timeUntil } from '@/lib/format'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Wallet, CalendarHeart, Apple, Dumbbell, TrendingUp, TrendingDown, Pill, Snowflake, Flame, ArrowRight } from 'lucide-react'
+import { Wallet, CalendarHeart, Apple, Dumbbell, TrendingUp, TrendingDown, Pill, Snowflake, Flame, ArrowRight, CalendarDays, Briefcase, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface DashboardData {
@@ -29,11 +29,19 @@ interface DashboardData {
   workoutPlans: number
   sessionsCount: number
   completedSessions: number
+  routine: {
+    todayDayType: string
+    workTasks: number
+    offTasks: number
+    todayTasks: number
+    todayDone: number
+    todayProgress: number
+  }
 }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
-export function Dashboard({ onNavigate }: { onNavigate: (t: 'budget' | 'appointments' | 'food' | 'workout') => void }) {
+export function Dashboard({ onNavigate }: { onNavigate: (t: 'budget' | 'appointments' | 'food' | 'workout' | 'routines') => void }) {
   const { data, isLoading } = useSWR<DashboardData>('/api/dashboard', fetcher, { refreshInterval: 30000 })
 
   if (isLoading || !data) {
@@ -55,6 +63,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: 'budget' | 'appointm
   const workoutProgress =
     data.totalExercises > 0 ? (data.completedExercises / data.totalExercises) * 100 : 0
   const freezerHealth = Math.min(100, data.freezerItems * 16)
+  const r = data.routine
 
   return (
     <div className="space-y-5">
@@ -95,7 +104,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: 'budget' | 'appointm
       </Card>
 
       {/* Quick action cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Next appointment */}
         <ActionCard
           title="Next ADHD Appointment"
@@ -209,6 +218,40 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: 'budget' | 'appointm
             />
           }
         />
+
+        {/* Daily Routine */}
+        <ActionCard
+          title="Today's Routine"
+          icon={<CalendarDays className="size-4" />}
+          accent="from-primary/20 to-accent/5"
+          onClick={() => onNavigate('routines')}
+          footer={
+            <>
+              <p className="flex items-center gap-1.5 font-medium text-foreground">
+                {r.todayDayType === 'work' ? (
+                  <><Briefcase className="size-3.5 text-primary" /> Work Day</>
+                ) : (
+                  <><CalendarDays className="size-3.5 text-primary" /> Off Day</>
+                )}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {r.workTasks} work · {r.offTasks} off day tasks
+              </p>
+              <p className="mt-1 flex items-center gap-1 text-xs font-medium text-primary">
+                <CheckCircle2 className="size-3" /> {r.todayDone}/{r.todayTasks} done today
+              </p>
+            </>
+          }
+          ring={
+            <ProgressRing
+              value={r.todayProgress}
+              size={70}
+              strokeWidth={7}
+              label={`${Math.round(r.todayProgress)}%`}
+              color="var(--primary)"
+            />
+          }
+        />
       </div>
 
       {/* Savings + month summary */}
@@ -244,11 +287,12 @@ export function Dashboard({ onNavigate }: { onNavigate: (t: 'budget' | 'appointm
             <CardTitle className="text-base">Quick Actions</CardTitle>
             <CardDescription>Jump to a section</CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
+          <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <QuickBtn icon={<Wallet className="size-4" />} label="Budget" onClick={() => onNavigate('budget')} />
             <QuickBtn icon={<CalendarHeart className="size-4" />} label="ADHD" onClick={() => onNavigate('appointments')} />
             <QuickBtn icon={<Apple className="size-4" />} label="Food" onClick={() => onNavigate('food')} />
             <QuickBtn icon={<Dumbbell className="size-4" />} label="Workout" onClick={() => onNavigate('workout')} />
+            <QuickBtn icon={<CalendarDays className="size-4" />} label="Routine" onClick={() => onNavigate('routines')} />
           </CardContent>
         </Card>
       </div>

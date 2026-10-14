@@ -42,3 +42,49 @@ Stage Summary:
 Unresolved issues / risks:
 - None blocking. 
 - Next-phase ideas: recharts mini-charts on dashboard (income vs expense trend), food expiry date tracking, workout progressive overload tracking (log weights per session over time), budget month-over-month comparison, appointment reminders via cron/notification.
+
+---
+Task ID: 2
+Agent: main (Z.ai Code)
+Task: Add Daily Routines feature — Work Day schedule (7 tasks) and Off Day schedule (24 tasks across morning/daytime/evening) with timeline, checkmarks, progress tracking, and dashboard integration.
+
+Work Log:
+- Added 2 Prisma models: RoutineTask (dayType/block/time/title/category/order) and RoutineLog (taskId/date/done with @@unique constraint).
+- Ran `bun run db:push` to create tables.
+- Wrote `scripts/seed-routines.ts` and seeded both schedules with user's EXACT times:
+  - Work Day (7): 7:00 Wake Up · 7:30 Clean room · 8:00 Cook/Eat · 8:30 Iron clothes/Music · 9:00 100 Push-ups · 9:00 Meditation (9:00–9:30) · 9:45 Go for work.
+  - Off Day (24): Morning (6): Wake/Clean/Cook/Music/Push-ups(100-200)/Meditation. Daytime (11): Trading/Gym/Lunch/Trading+Journal/Learn/100 Push-ups/Nap/Snack/Wash-Iron/Cook Dinner/Go out. Evening&Night (7): Music+Learn/100 Push-ups+Dinner/Meditation/Research+Journal/Read/Sleep(9h target)/Wash+Sleep.
+- Built `/api/routines` route: GET (tasks + logs by date), PATCH (upsert toggle), POST (add task), DELETE.
+- Built `src/components/habify/routines-tab.tsx`:
+  - Hero card with day-type label, progress ring (done/total), workout/meditation/rest stat pills.
+  - Work Day / Off Day toggle tabs.
+  - Timeline grouped by Morning/Daytime/Evening with vertical connector line, time pills (AM/PM), category icons (12 categories: wake/clean/cook/music/workout/meditation/work/learn/sleep/social/hygiene/other), category-colored badges.
+  - Per-block progress bars.
+  - Task rows: click circle to toggle done (strikethrough), hover-delete button.
+  - Date picker, "All Done" (marks all), "Reset" (clears day), "Add" dialog.
+  - ADHD principles banner explaining why routines help.
+- Extended `/api/dashboard` to return routine stats: todayDayType (inferred weekday), workTasks/offTasks counts, todayDone/todayTasks/todayProgress.
+- Added "Today's Routine" action card to Dashboard (5th card, grid now 3-col on lg) with progress ring + jump-to-routines.
+- Added Routine Quick Action button on dashboard.
+- Added Routine tab (CalendarDays icon) to main page navigation (now 6 tabs).
+- Fixed bug: API was returning a Map for logs which JSON-serializes to {} → changed to return logs array, client builds Map via useMemo.
+- Regenerated Prisma client (`bun run db:generate`) and restarted dev server so new models are available.
+- Verified end-to-end with agent-browser:
+  - Dashboard shows "Today's Routine · Work Day · 7 work · 24 off day tasks · 0/7 done today · 0%".
+  - Routine tab renders Work Day timeline (7 tasks) and Off Day timeline (24 tasks) exactly as specified.
+  - Task toggle works: marked Wake Up done → hero updated to "1 of 7 tasks done · 14% complete", Morning block "1/7".
+  - Day switching works (Work ↔ Off), date picker present, All Done/Reset/Add buttons functional.
+  - All Off Day blocks render: Morning 0/6, Daytime 0/11, Evening & Night 0/7.
+  - No errors in dev log, lint clean, all API calls 200.
+
+Stage Summary:
+- Daily Routines feature fully integrated as 6th tab in Habify.
+- Both Work Day and Off Day schedules seeded with user's exact times and structure.
+- Timeline UI with AM/PM time pills, category icons, vertical connector, per-block progress bars, hero progress ring, ADHD principle banner.
+- Tasks persist per-date via RoutineLog (toggle on/off, resets per day, historical tracking).
+- Dashboard surface shows today's routine progress and links to full routine tab.
+- Verified: lint clean, dev server running, browser-tested all interactions.
+
+Unresolved issues / risks:
+- None blocking.
+- Next-phase ideas: routine streak counter (consecutive days completed), "current task" highlight based on real time, weekly routine completion chart, copy-yesterday's-completion, routine templates.

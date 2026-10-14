@@ -116,3 +116,28 @@ model WorkoutSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ---- DAILY ROUTINES ----
+
+model RoutineTask {
+  id        String   @id @default(cuid())
+  dayType   String // "work" | "off"
+  block     String // "morning" | "daytime" | "evening"
+  time      String // "07:00"
+  title     String // "Wake Up"
+  category  String // "wake" | "clean" | "cook" | "music" | "workout" | "meditation" | "work" | "learn" | "sleep" | "social" | "hygiene" | "other"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RoutineLog {
+  id        String   @id @default(cuid())
+  taskId    String
+  date      String // "2026-10-14"
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, date])
+}
