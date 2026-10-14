@@ -88,3 +88,39 @@ Stage Summary:
 Unresolved issues / risks:
 - None blocking.
 - Next-phase ideas: routine streak counter (consecutive days completed), "current task" highlight based on real time, weekly routine completion chart, copy-yesterday's-completion, routine templates.
+
+---
+Task ID: 3
+Agent: main (Z.ai Code)
+Task: Add a "Right Now" feature to Daily Routines — show what routine you're currently in based on real time (e.g. at 1:21 PM it shows which task is active), with a live clock, current task, next upcoming task, and time-until countdown.
+
+Work Log:
+- Added time helper functions in routines-tab.tsx: `timeToMin` (HH:MM → minutes), `minToLabel`, `findCurrentAndNext` (returns latest task whose time ≤ now as "current", and first task whose time > now as "next"), `minutesUntil`.
+- Added live clock state to RoutinesTab: `now` Date updated every 30s via setInterval, `nowMin` (minutes since midnight), `isToday` flag.
+- Computed `currentTask` + `nextTask` via useMemo from dayTasks + nowMin.
+- Built `NowCard` component placed at the top of the Routines tab (above the day hero):
+  - Teal/green gradient hero with live "RIGHT NOW" pulse badge + radio icon.
+  - Live clock pill (HH:MM AM/PM) updating every 30s.
+  - Two-column layout: "IN PROGRESS NOW" (current task with category icon, start time, "Xm ago" / "Xh Ym ago", mark-as-done button) and "UP NEXT" (next task with icon, scheduled time, "in Xm" countdown).
+  - Edge cases handled: viewing a non-today date (shows hint), no tasks scheduled, past last task of the day (shows "Day complete · Last task was X").
+- Updated `RoutineRow` to accept `isCurrent` and `isNext` props:
+  - Current task: ring-2 ring-primary/40 + bg-primary/5 highlight, time pill turns primary color, "Now" badge.
+  - Next task: dashed ring-chart-4/40 highlight, "Next" badge in chart-4 color.
+  - Timeline dot color reflects state (done=green, current=primary, next=chart-4).
+- Passed `isCurrent={isToday && currentTask?.id === task.id}` and `isNext={isToday && nextTask?.id === task.id}` to each RoutineRow.
+- Fixed lint (react-hooks/set-state-in-effect for the now interval init).
+- Verified end-to-end with agent-browser at 10:24 AM:
+  - Work Day: "RIGHT NOW 10:24 AM · IN PROGRESS NOW: Go for work · Started at 09:45 · 39m ago · UP NEXT: Day complete". Timeline highlights "Go for work" with NOW badge.
+  - Off Day: "RIGHT NOW 10:24 AM · IN PROGRESS NOW: Start Trading / Work · Started at 10:00 · 24m ago · UP NEXT: Go to gym · At 10:30 · in 6m". Timeline shows Now badge on "Start Trading / Work" and Next badge on "Go to gym".
+  - This confirms at 1:21 PM it would show "Lunch" (started 12:30, 51m ago) → next "Trading / Journal" (at 13:00, in ~99m).
+  - Dev log clean, lint passes, no errors.
+
+Stage Summary:
+- "Right Now" live routine feature fully working on the Routines tab.
+- Live clock (30s refresh), current task detection (latest task with time ≤ now), next task countdown (minutes until), "Xm ago" elapsed time.
+- Timeline visually highlights the current (primary ring + NOW badge) and next (dashed chart-4 ring + NEXT badge) tasks.
+- Works for both Work Day and Off Day schedules, and only activates when viewing today's date.
+
+Unresolved issues / risks:
+- None blocking.
+- Next-phase ideas: browser notification when a new task starts, "skip" button for current task, routine adherence streak (days where all tasks completed), average start-time deviation tracking.

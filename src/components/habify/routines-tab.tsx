@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import useSWR, { mutate as globalMutate } from 'swr'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -48,6 +48,9 @@ import {
   Users,
   Coffee,
   Clock,
+  Play,
+  ArrowRight,
+  Radio,
 } from 'lucide-react'
 
 interface RoutineTask {
@@ -94,6 +97,42 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Convert "HH:MM" to minutes since midnight
+function timeToMin(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
+function minToLabel(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+// Given a sorted list of tasks (by time) and "now" in minutes, return current + next task.
+// "Current" = the latest task whose time <= now.
+// "Next" = the first task whose time > now.
+function findCurrentAndNext(tasks: RoutineTask[], nowMin: number) {
+  const sorted = [...tasks].sort((a, b) => timeToMin(a.time) - timeToMin(b.time))
+  let current: RoutineTask | null = null
+  let next: RoutineTask | null = null
+  for (const t of sorted) {
+    const tm = timeToMin(t.time)
+    if (tm <= nowMin) current = t
+    else if (!next) {
+      next = t
+      break
+    }
+  }
+  // If we've passed all tasks, current = last task, next = null
+  if (!current && sorted.length > 0) current = sorted[sorted.length - 1]
+  return { current, next }
+}
+
+function minutesUntil(targetTime: string, nowMin: number): number {
+  return timeToMin(targetTime) - nowMin
+}
+
 export function RoutinesTab() {
   const [dayType, setDayType] = useState<'work' | 'off'>('work')
   const [date, setDate] = useState(todayStr())
@@ -135,6 +174,22 @@ export function RoutinesTab() {
     }
     return ['morning', 'daytime', 'evening'].filter((b) => map.has(b)).map((b) => ({ block: b, items: map.get(b)! }))
   }, [dayTasks])
+
+  // Live clock — updates every 30s
+  const [now, setNow] = useState<Date | null>(null)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNow(new Date())
+    const t = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(t)
+  }, [])
+
+  const nowMin = now ? now.getHours() * 60 + now.getMinutes() : 0
+  const isToday = date === todayStr()
+  const { current: currentTask, next: nextTask } = useMemo(
+    () => findCurrentAndNext(dayTasks, nowMin),
+    [dayTasks, nowMin]
+  )
 
   async function toggleTask(task: RoutineTask) {
     const current = logs.get(task.id)?.done || false
@@ -213,6 +268,18 @@ export function RoutinesTab() {
           <AddTaskDialog open={addOpen} onOpenChange={setAddOpen} dayType={dayType} onDone={refresh} order={dayTasks.length} />
         </div>
       </div>
+
+      {/* NOW card — what routine you're in right now */}
+      <NowCard
+        now={now}
+        isToday={isToday}
+        dayType={dayType}
+        currentTask={currentTask}
+        nextTask={nextTask}
+        nowMin={nowMin}
+        currentDone={currentTask ? !!logs.get(currentTask.id)?.done : false}
+        onToggleCurrent={() => currentTask && toggleTask(currentTask)}
+      />
 
       {/* Day toggle + progress hero */}
       <Card className="relative overflow-hidden rounded-3xl border-none bg-gradient-to-br from-primary/90 via-primary/80 to-accent/80 text-primary-foreground shadow-xl shadow-primary/20">
@@ -309,6 +376,8 @@ export function RoutinesTab() {
                       key={task.id}
                       task={task}
                       done={!!logs.get(task.id)?.done}
+                      isCurrent={isToday && currentTask?.id === task.id}
+                      isNext={isToday && nextTask?.id === task.id}
                       onToggle={() => toggleTask(task)}
                       onDelete={() => deleteTask(task.id)}
                       isLast={idx === items.length - 1}
@@ -350,15 +419,163 @@ export function RoutinesTab() {
   )
 }
 
+function NowCard({
+  now,
+  isToday,
+  dayType,
+  currentTask,
+  nextTask,
+  nowMin,
+  currentDone,
+  onToggleCurrent,
+}: {
+  now: Date | null
+  isToday: boolean
+  dayType: 'work' | 'off'
+  currentTask: RoutineTask | null
+  nextTask: RoutineTask | null
+  nowMin: number
+  currentDone: boolean
+  onToggleCurrent: () => void
+}) {
+  const timeStr = now
+    ? now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    : '--:--'
+
+  const currentMeta = currentTask ? (CATEGORY_META[currentTask.category] || CATEGORY_META.other) : null
+  const CurrentIcon = currentMeta?.icon || Clock
+
+  const nextMeta = nextTask ? (CATEGORY_META[nextTask.category] || CATEGORY_META.other) : null
+  const NextIcon = nextMeta?.icon || Clock
+
+  const minsToNext = nextTask ? minutesUntil(nextTask.time, nowMin) : null
+  const minsSinceCurrent = currentTask ? nowMin - timeToMin(currentTask.time) : null
+
+  return (
+    <Card className="relative overflow-hidden rounded-3xl border-none bg-gradient-to-br from-chart-3/90 via-chart-2/80 to-primary/70 text-primary-foreground shadow-xl shadow-chart-2/20">
+      <div className="absolute -right-16 -top-16 size-56 rounded-full bg-white/10 blur-3xl" />
+      <div className="absolute -bottom-12 -left-12 size-40 rounded-full bg-chart-4/20 blur-2xl" />
+      <CardContent className="relative p-5 sm:p-6">
+        {/* Top row: live badge + clock */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="relative flex size-2.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-chart-5 opacity-75" />
+              <span className="relative inline-flex size-2.5 rounded-full bg-chart-5" />
+            </span>
+            <span className="text-xs font-medium uppercase tracking-widest text-primary-foreground/80">
+              Right Now
+            </span>
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 backdrop-blur">
+            <Radio className="size-3.5" />
+            <span className="text-lg font-bold tabular-nums">{timeStr}</span>
+          </div>
+        </div>
+
+        {!isToday ? (
+          <div className="mt-5 rounded-2xl bg-white/10 p-4 text-center backdrop-blur">
+            <p className="text-sm text-primary-foreground/80">
+              Viewing a different day · switch to today to see your live routine.
+            </p>
+          </div>
+        ) : !currentTask ? (
+          <div className="mt-5 rounded-2xl bg-white/10 p-4 text-center backdrop-blur">
+            <p className="text-sm text-primary-foreground/80">No routine scheduled for this {dayType === 'work' ? 'work' : 'off'} day yet.</p>
+          </div>
+        ) : (
+          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* CURRENT */}
+            <div className="rounded-2xl bg-white/15 p-4 backdrop-blur">
+              <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                <Play className="size-3" /> In progress now
+              </div>
+              <div className="mt-2 flex items-start gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                  <CurrentIcon className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-semibold leading-tight">{currentTask.title}</p>
+                  <p className="mt-0.5 text-xs text-primary-foreground/80">
+                    Started at {currentTask.time}
+                    {minsSinceCurrent !== null && minsSinceCurrent > 0 && (
+                      <> · {formatDuration(minsSinceCurrent)} ago</>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onToggleCurrent}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/20 px-3 py-2 text-xs font-medium backdrop-blur transition-colors hover:bg-white/30"
+              >
+                {currentDone ? (
+                  <><CheckCircle2 className="size-3.5" /> Done — nice!</>
+                ) : (
+                  <><Circle className="size-3.5" /> Mark as done</>
+                )}
+              </button>
+            </div>
+
+            {/* NEXT */}
+            <div className="rounded-2xl bg-white/10 p-4 backdrop-blur">
+              <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                <ArrowRight className="size-3" /> Up next
+              </div>
+              {nextTask ? (
+                <div className="mt-2 flex items-start gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                    <NextIcon className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-semibold leading-tight">{nextTask.title}</p>
+                    <p className="mt-0.5 text-xs text-primary-foreground/80">
+                      At {nextTask.time}
+                      {minsToNext !== null && minsToNext > 0 && (
+                        <> · in {formatDuration(minsToNext)}</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 flex items-start gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                    <Bed className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-semibold leading-tight">Day complete</p>
+                    <p className="mt-0.5 text-xs text-primary-foreground/80">Last task was {currentTask.title}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 1) return 'now'
+  if (mins < 60) return `${mins}m`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
 function RoutineRow({
   task,
   done,
+  isCurrent,
+  isNext,
   onToggle,
   onDelete,
   isLast,
 }: {
   task: RoutineTask
   done: boolean
+  isCurrent?: boolean
+  isNext?: boolean
   onToggle: () => void
   onDelete: () => void
   isLast: boolean
@@ -370,16 +587,30 @@ function RoutineRow({
   const tod = hour < 12 ? 'AM' : 'PM'
 
   return (
-    <div className={`group relative flex items-start gap-3 rounded-2xl p-2.5 transition-colors hover:bg-muted/40 ${done ? 'opacity-60' : ''}`}>
+    <div
+      className={`group relative flex items-start gap-3 rounded-2xl p-2.5 transition-all hover:bg-muted/40 ${
+        done ? 'opacity-60' : ''
+      } ${isCurrent ? 'ring-2 ring-primary/40 bg-primary/5' : ''} ${
+        isNext ? 'ring-1 ring-dashed ring-chart-4/40' : ''
+      }`}
+    >
       {/* time pill */}
-      <div className="relative z-10 flex size-14 shrink-0 flex-col items-center justify-center rounded-xl bg-background shadow-sm">
+      <div
+        className={`relative z-10 flex size-14 shrink-0 flex-col items-center justify-center rounded-xl shadow-sm ${
+          isCurrent ? 'bg-primary text-primary-foreground' : 'bg-background'
+        }`}
+      >
         <span className="text-sm font-bold tabular-nums leading-none">{task.time}</span>
-        <span className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{tod}</span>
+        <span className={`mt-0.5 text-[9px] uppercase tracking-wide ${isCurrent ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{tod}</span>
       </div>
 
       {/* dot on timeline */}
       <div className="absolute left-[78px] top-1/2 hidden -translate-y-1/2 sm:block">
-        <div className={`size-2 rounded-full ${done ? 'bg-chart-3' : 'bg-primary/40'}`} />
+        <div
+          className={`size-2 rounded-full ${
+            done ? 'bg-chart-3' : isCurrent ? 'bg-primary' : isNext ? 'bg-chart-4' : 'bg-primary/40'
+          }`}
+        />
       </div>
 
       <div className="flex min-w-0 flex-1 items-center gap-3 pl-1">
@@ -387,7 +618,19 @@ function RoutineRow({
           <Icon className={`size-4 ${meta.color}`} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className={`text-sm font-medium ${done ? 'line-through' : ''}`}>{task.title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className={`text-sm font-medium ${done ? 'line-through' : ''}`}>{task.title}</p>
+            {isCurrent && (
+              <Badge className="rounded-full bg-primary px-1.5 py-0 text-[9px] uppercase tracking-wide">
+                Now
+              </Badge>
+            )}
+            {isNext && (
+              <Badge variant="outline" className="rounded-full border-chart-4/40 px-1.5 py-0 text-[9px] text-chart-4">
+                Next
+              </Badge>
+            )}
+          </div>
           <Badge variant="outline" className="mt-0.5 rounded-full px-1.5 py-0 text-[9px] capitalize">
             {task.category}
           </Badge>
