@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getDayTypeForDate } from '@/lib/routine-cycle'
 
 export async function GET() {
   const now = new Date()
@@ -48,12 +49,9 @@ export async function GET() {
     0
   )
 
-  // Routine progress for today (default to work day if no log exists yet today)
-  const doneToday = routineLogs.filter((l) => l.done).length
+  // Routine progress for today — auto-detected from the 2-work/2-off cycle
   const logMap = new Map(routineLogs.map((l) => [l.taskId, l]))
-  // Pick the day type that has more tasks (work: 7, off: 24). If no logs, infer from weekday.
-  const isWeekend = now.getDay() === 0 || now.getDay() === 6
-  const todayDayType = isWeekend ? 'off' : 'work'
+  const todayDayType = getDayTypeForDate(now)
   const todayTasks = routineTasks.filter((t) => t.dayType === todayDayType)
   const todayDone = todayTasks.filter((t) => logMap.get(t.id)?.done).length
 

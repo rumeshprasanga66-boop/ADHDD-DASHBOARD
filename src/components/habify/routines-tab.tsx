@@ -52,6 +52,7 @@ import {
   ArrowRight,
   Radio,
 } from 'lucide-react'
+import { getDayTypeForDate, getUpcomingDays } from '@/lib/routine-cycle'
 
 interface RoutineTask {
   id: string
@@ -134,13 +135,25 @@ function minutesUntil(targetTime: string, nowMin: number): number {
 }
 
 export function RoutinesTab() {
-  const [dayType, setDayType] = useState<'work' | 'off'>('work')
+  const [dayType, setDayType] = useState<'work' | 'off'>(() => getDayTypeForDate(new Date()))
   const [date, setDate] = useState(todayStr())
   const { data, mutate } = useSWR<{ date: string; tasks: RoutineTask[]; logs: RoutineLog[] }>(
     `/api/routines?date=${date}`,
     fetcher
   )
   const [addOpen, setAddOpen] = useState(false)
+
+  // The cycle type for the selected date (what the pattern says it "should" be)
+  const cycleDayType = getDayTypeForDate(date)
+  const isFollowingCycle = dayType === cycleDayType
+
+  // Auto-sync dayType to the cycle when the date changes
+  useEffect(() => {
+    setDayType(getDayTypeForDate(date))
+  }, [date])
+
+  // Upcoming 10-day cycle preview
+  const upcomingDays = useMemo(() => getUpcomingDays(10), [])
 
   const refresh = async () => {
     await mutate()
@@ -178,7 +191,6 @@ export function RoutinesTab() {
   // Live clock — updates every 30s
   const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNow(new Date())
     const t = setInterval(() => setNow(new Date()), 30000)
     return () => clearInterval(t)
@@ -298,7 +310,11 @@ export function RoutinesTab() {
                 )}
               </p>
               <p className="mt-1 text-sm text-primary-foreground/80">
-                {doneCount} of {total} tasks done · {total > 0 ? `${Math.round(progress)}%` : '0%'} complete
+                {date === todayStr()
+                  ? isFollowingCycle
+                    ? `Auto-matched your 2-on / 2-off cycle · ${doneCount} of ${total} done`
+                    : `Previewing ${dayType} routine · cycle says ${cycleDayType}`
+                  : `${doneCount} of ${total} tasks done · ${total > 0 ? `${Math.round(progress)}%` : '0%'} complete`}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs backdrop-blur">
@@ -325,22 +341,96 @@ export function RoutinesTab() {
       </Card>
 
       {/* Day toggle */}
-      <Tabs value={dayType} onValueChange={(v) => setDayType(v as 'work' | 'off')}>
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-muted/40 p-1.5 sm:max-w-md">
-          <TabsTrigger
-            value="work"
-            className="flex items-center gap-2 rounded-xl py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+      <div className="space-y-2">
+        <Tabs value={dayType} onValueChange={(v) => setDayType(v as 'work' | 'off')}>
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-muted/40 p-1.5 sm:max-w-md">
+            <TabsTrigger
+              value="work"
+              className="flex items-center gap-2 rounded-xl py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              <Briefcase className="size-4" /> Work Day
+            </TabsTrigger>
+            <TabsTrigger
+              value="off"
+              className="flex items-center gap-2 rounded-xl py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              <CalendarDays className="size-4" /> Off Day
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              cycleDayType === 'work'
+                ? 'bg-chart-2/15 text-chart-2'
+                : 'bg-chart-4/15 text-chart-4'
+            }`}
           >
-            <Briefcase className="size-4" /> Work Day
-          </TabsTrigger>
-          <TabsTrigger
-            value="off"
-            className="flex items-center gap-2 rounded-xl py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-          >
-            <CalendarDays className="size-4" /> Off Day
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+            <Sparkles className="size-3" />
+            Auto: {cycleDayType === 'work' ? 'Work Day' : 'Off Day'} (2-on / 2-off cycle)
+          </span>
+          {!isFollowingCycle && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">
+              Previewing {dayType} (cycle says {cycleDayType})
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Cycle preview — next 10 days */}
+      <Card className="rounded-3xl border-border/60">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CalendarDays className="size-4 text-primary" /> Your Work Cycle
+          </CardTitle>
+          <CardDescription>2 work days · 2 off days · repeating. Tap a day to view its routine.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2 overflow-x-auto scroll-soft pb-1">
+            {upcomingDays.map((d) => {
+              const isActive = d.dateStr === date
+              const isWork = d.dayType === 'work'
+              return (
+                <button
+                  key={d.dateStr}
+                  onClick={() => setDate(d.dateStr)}
+                  className={`flex min-w-[64px] shrink-0 flex-col items-center gap-0.5 rounded-2xl border p-2 transition-all hover:shadow-md ${
+                    isActive
+                      ? 'border-primary ring-2 ring-primary/30'
+                      : 'border-border/60'
+                  } ${
+                    isWork
+                      ? 'bg-gradient-to-b from-chart-2/15 to-chart-2/5'
+                      : 'bg-gradient-to-b from-chart-4/15 to-chart-4/5'
+                  }`}
+                >
+                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{d.weekday}</span>
+                  <span className={`text-lg font-bold ${d.isToday ? 'text-primary' : ''}`}>{d.dayNum}</span>
+                  <span
+                    className={`rounded-full px-1.5 py-0 text-[9px] font-medium ${
+                      isWork ? 'bg-chart-2/20 text-chart-2' : 'bg-chart-4/20 text-chart-4'
+                    }`}
+                  >
+                    {d.label}
+                  </span>
+                  {d.isToday && (
+                    <span className="text-[8px] font-medium text-primary">Today</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-3 flex items-center gap-4 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="size-2 rounded-full bg-chart-2" /> Work Day
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="size-2 rounded-full bg-chart-4" /> Off Day
+            </span>
+            <span className="ml-auto">Pattern: 2 work → 2 off → repeat</span>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Timeline */}
       <div className="space-y-4">

@@ -124,3 +124,47 @@ Stage Summary:
 Unresolved issues / risks:
 - None blocking.
 - Next-phase ideas: browser notification when a new task starts, "skip" button for current task, routine adherence streak (days where all tasks completed), average start-time deviation tracking.
+
+---
+Task ID: 4
+Agent: main (Z.ai Code)
+Task: Implement 2-work / 2-off day cycle so the routine auto-switches based on the date. User's pattern: yesterday+today = off days, tomorrow+next-tomorrow = work days, continuing 2-on/2-off forever.
+
+Work Log:
+- Created `src/lib/routine-cycle.ts` with:
+  - ANCHOR_DATE = Oct 15, 2026 (a known work day).
+  - `getDayTypeForDate(date)` → computes work/off via a 4-day cycle [work, work, off, off] using modulo arithmetic on days-since-anchor.
+  - `getUpcomingDays(count)` → returns next N days with dateStr, dayType, weekday, dayNum, isToday.
+  - `formatDateStr` helper.
+- Verified cycle output: Oct 14=off(today), 13=off(yesterday), 15=work(tomorrow), 16=work, 17=off, 18=off, 19=work, 20=work, 21=off, 22=off, 23=work — exactly matches the user's stated pattern.
+- Updated `/api/dashboard` to import `getDayTypeForDate` and replace the old weekend-based `todayDayType` logic. Now returns `todayDayType: "off"` for Oct 14 (correct), with `todayTasks: 24` (off-day schedule).
+- Updated `RoutinesTab`:
+  - `dayType` state now initializes from `getDayTypeForDate(new Date())`.
+  - Added `useEffect` that auto-syncs `dayType` to the cycle type whenever `date` changes (so routine follows the pattern automatically).
+  - Added `cycleDayType` + `isFollowingCycle` derived values.
+  - Added `upcomingDays` memo (next 10 days) for the cycle preview.
+  - Hero subtitle now shows "Auto-matched your 2-on / 2-off cycle" when following the pattern, or "Previewing X routine · cycle says Y" when manually overridden.
+  - Added "Auto: Work Day / Off Day (2-on / 2-off cycle)" badge below the Work/Off toggle.
+  - Added a new "Your Work Cycle" card with a horizontally-scrollable 10-day strip: each day shows weekday, day number, Work/Off pill, and a "Today" marker. Days are color-coded (blue=work, pink=off) and clickable to jump to that date. The selected day gets a primary ring highlight.
+  - Legend row: "Work Day / Off Day / Pattern: 2 work → 2 off → repeat".
+- Removed 2 unused eslint-disable comments flagged by lint.
+- Verified end-to-end with agent-browser at 10:39 AM:
+  - Dashboard shows "Today's Routine · Off Day · 0/24 done today" (auto-detected, not weekend-based).
+  - Routines tab auto-loads Off Day Schedule with "Auto-matched your 2-on / 2-off cycle" subtitle.
+  - "Now" card: "IN PROGRESS NOW: Go to gym · Started at 10:30 · 9m ago · UP NEXT: Lunch · At 12:30 · in 1h 51m" (correct off-day task for 10:39 AM).
+  - Cycle preview strip renders 10 days with correct Work/Off coloring matching the 2-on/2-off pattern.
+  - Clicking tomorrow (Thu 15) in the strip → routine auto-switches to Work Day Schedule (7 tasks), "Auto: Work Day" badge, "Now" card says "Viewing a different day".
+  - Clicking back to today (Wed 14) → returns to Off Day schedule.
+  - Dev log clean, lint passes, no errors.
+
+Stage Summary:
+- Routine now auto-switches between Work Day and Off Day based on the 2-on/2-off cycle.
+- The cycle is anchored at Oct 15, 2026 = work day; pattern repeats [work, work, off, off] indefinitely.
+- Dashboard auto-detects today as Off Day (24 tasks) without any weekend heuristic.
+- Routines tab auto-selects the correct day type when the date changes; user can still manually preview the other type via the toggle.
+- New "Your Work Cycle" card shows the next 10 days as a color-coded, clickable strip so the user always knows which days are work vs off.
+- "Now" card correctly reflects today's cycle-driven routine.
+
+Unresolved issues / risks:
+- None blocking.
+- Next-phase ideas: make the cycle anchor configurable via settings UI, support custom cycle lengths (e.g. 3-on/2-off), show cycle adherence stats, push browser notifications when the day type changes at midnight.
